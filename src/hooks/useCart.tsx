@@ -1,7 +1,7 @@
 import { createContext, ReactNode, useContext, useState } from 'react';
 import { toast } from 'react-toastify';
 import { api } from '../services/api';
-import { Product, Stock } from '../types';
+import { Product } from '../types';
 
 interface CartProviderProps {
   children: ReactNode;
@@ -32,10 +32,9 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     return [];
   });
 
-  const saveCart = async (products: Product[]) => {
-    const newCart = [...cart, ...products];
-    setCart(newCart);
-    localStorage.setItem('@RocketShoes:cart', JSON.stringify(newCart));
+  const saveCart = async (cart: Product[]) => {
+    setCart(cart);
+    localStorage.setItem('@RocketShoes:cart', JSON.stringify(cart));
   }
 
   const checkStock = async (productId: number, newAmount: number) => {
@@ -50,21 +49,26 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
 
   const addProduct = async (productId: number) => {
     try {
-      const cartProduct = cart.find(product => product.id === productId);
+      let newCart = [...cart]
+      let cartProduct = cart.find(product => product.id === productId)
       if (cartProduct) {
-        const newAmount = cartProduct.amount + 1;
+        const newAmount = cartProduct.amount + 1
         const hasStock = await checkStock(cartProduct.id, newAmount);
         if (hasStock) {
-          cartProduct.amount = newAmount;
-          saveCart([cartProduct]);
+          newCart = cart.map((product) => {
+            if (product.id !== cartProduct?.id) return product
+            return { ...cartProduct, amount: cartProduct.amount + 1 }
+          })
+          saveCart(newCart)
         }
       } else {
-        const newAmount = 1;
+        const newAmount = 1
         const hasStock = await checkStock(productId, newAmount);
         if (hasStock) {
           const { data: product } = await api.get(`products/${productId}`);
           const newCartProduct = { ...product, amount: newAmount };
-          saveCart([newCartProduct]);
+          newCart = [...newCart, newCartProduct]
+          saveCart(newCart)
         }
       }
     } catch {
@@ -94,9 +98,16 @@ export function CartProvider({ children }: CartProviderProps): JSX.Element {
     amount,
   }: UpdateProductAmount) => {
     try {
-      // TODO
+      const hasStock = await checkStock(productId, amount)
+      if (!hasStock) throw new Error()
+      if (amount < 1) return
+      const newCartProducts = cart.map((product) => {
+        if (product.id !== productId) return product
+        return { ...product, amount }
+      })
+      saveCart(newCartProducts)
     } catch {
-      // TODO
+      toast.error('Erro na alteração de quantidade do produto')
     }
   };
 
